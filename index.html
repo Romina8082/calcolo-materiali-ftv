@@ -1,0 +1,269 @@
+
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Calcolo Materiali FTV</title>
+<style>
+:root{font-family:Arial,sans-serif;color:#17334c;background:#edf2f7}
+*{box-sizing:border-box}
+body{margin:0}
+header{background:#153d60;color:white;padding:23px 17px}
+header h1{margin:0;font-size:24px}
+header p{margin:7px 0 0}
+main{max-width:850px;margin:auto;padding:15px}
+section{background:white;border-radius:15px;padding:18px;margin:14px 0;box-shadow:0 2px 8px #1232}
+h2{font-size:20px;margin:5px 0 18px}
+label{display:block;font-weight:bold;margin:12px 0 6px}
+input,select{width:100%;padding:12px;border:1px solid #bac8d4;border-radius:8px;font-size:16px}
+button{border:0;border-radius:9px;padding:12px 15px;background:#f39228;color:#142c40;font-weight:bold;font-size:15px;margin:5px 4px 5px 0;cursor:pointer}
+button.alt{background:#dce7ef}
+button.danger{background:#f9d6d6}
+.fila{background:#f0f5f9;padding:12px;border-radius:10px;margin:10px 0}
+.flex{display:flex;gap:10px;align-items:center}
+.flex input{flex:1;min-width:0}
+.small{color:#617487;font-size:13px;line-height:1.5}
+table{width:100%;border-collapse:collapse;font-size:14px}
+td,th{padding:11px 7px;text-align:left;border-bottom:1px solid #dbe4eb}
+th{background:#eaf1f7}
+td:last-child,th:last-child{text-align:right}
+.pannelli{display:flex;flex-wrap:wrap;gap:4px;margin:9px 0 17px}
+.panel{width:35px;height:55px;background:#23618b;border:2px solid #91b9d4;border-radius:2px}
+.rail{height:5px;background:#ed9c2e;margin:8px 0}
+.result{background:#eef5fa;padding:12px;border-radius:9px;margin-top:12px}
+.hidden{display:none}
+@media print{
+button,.no-print{display:none!important}
+body{background:white}
+section{box-shadow:none;border:1px solid #ddd}
+}
+</style>
+</head>
+<body>
+<header>
+<h1>☀️ Calcolo Materiali FTV</h1>
+<p>Dimensionamento e distinta materiali</p>
+</header>
+<main>
+<section>
+<h2>Nuovo progetto</h2>
+<label>Nome lavoro</label>
+<input id="nome" placeholder="Es. Rossi - falda sud">
+<label>File di pannelli verticali</label>
+<div id="file"></div>
+<button onclick="aggiungiFila()">+ Aggiungi fila</button>
+<label>Interasse massimo vitoni</label>
+<select id="passo">
+<option value="80">80 cm</option>
+<option value="85">85 cm</option>
+<option value="90" selected>90 cm</option>
+</select>
+<label>Spezzoni disponibili (cm)</label>
+<input id="avanzi" placeholder="Es. 104, 80, 155">
+<p class="small">
+118 cm per pannello. Due linee di profilo
+per ogni fila verticale. Barre da 340 cm.
+Gli spezzoni possono essere riutilizzati.
+</p>
+<button onclick="calcola()">Calcola materiali</button>
+<button class="alt" onclick="salva()">Salva progetto</button>
+<button class="alt" onclick="carica()">Carica salvato</button>
+</section>
+<section>
+<h2>Schema disposizione</h2>
+<div id="schema">
+<p class="small">Inserisci i pannelli e premi Calcola materiali.</p>
+</div>
+</section>
+<section>
+<h2>Distinta materiali</h2>
+<div id="risultato">
+<p class="small">Nessun calcolo effettuato.</p>
+</div>
+<button class="alt" onclick="window.print()">Stampa / Salva PDF</button>
+</section>
+<section>
+<h2>Note tecniche</h2>
+<p class="small">
+I risultati sono stime geometriche, non verifiche
+strutturali. Gli ancoraggi devono rispettare
+le istruzioni del produttore, i supporti del
+tetto e i carichi di progetto.
+</p>
+<p class="small">
+Il numero di barre e giunzioni è una stima
+con tagli riutilizzabili. Verificare lunghezze
+minime di appoggio, posizione delle giunzioni
+e spessore della lama.
+</p>
+</section>
+</main>
+<script>
+const fileBox=document.getElementById("file");
+let righe=[];
+
+function aggiungiFila(n=4){
+ righe.push(n);
+ disegnaRighe();
+}
+function disegnaRighe(){
+ fileBox.innerHTML="";
+ righe.forEach((n,i)=>{
+  let d=document.createElement("div");
+  d.className="fila";
+  let l=document.createElement("label");
+  l.textContent="Fila "+(i+1)+" - numero pannelli";
+  let wrap=document.createElement("div");
+  wrap.className="flex";
+  let inp=document.createElement("input");
+  inp.type="number";
+  inp.min="1";
+  inp.max="100";
+  inp.value=n;
+  inp.onchange=()=>{
+   righe[i]=Math.max(1,Math.floor(Number(inp.value)||1));
+   inp.value=righe[i];
+  };
+  let del=document.createElement("button");
+  del.className="danger";
+  del.textContent="Elimina";
+  del.onclick=()=>{
+   righe.splice(i,1);
+   disegnaRighe();
+  };
+  wrap.append(inp,del);
+  d.append(l,wrap);
+  fileBox.append(d);
+ });
+}
+function calcola(){
+ if(!righe.length){
+  alert("Aggiungi almeno una fila");
+  return;
+ }
+ const passo=Number(document.getElementById("passo").value);
+ const pannelli=righe.reduce((a,b)=>a+b,0);
+ const morsetti=righe.reduce((a,b)=>a+2*(b+1),0);
+ const linee=righe.flatMap(n=>[n*118,n*118]);
+ const metri=linee.reduce((a,b)=>a+b,0)/100;
+ const vitoni=linee.reduce((a,L)=>a+Math.ceil(L/passo)+1,0);
+ const inputAvanzi=document.getElementById("avanzi").value;
+ let scorte=inputAvanzi.split(",").map(x=>Number(x.trim()))
+ .filter(x=>Number.isFinite(x)&&x>0&&x<=340);
+ let tagli=[];
+ let nuove=0;
+ let giunzioni=0;
+ let residui=[...scorte];
+ // Taglio euristico: prima gli spezzoni disponibili,
+ // poi nuove barre. Non è un ottimo garantito.
+ for(const L of [...linee].sort((a,b)=>b-a)){
+  let resto=L;
+  let pezzi=0;
+  while(resto>0.001){
+   let idx=residui.findIndex(x=>x>=resto);
+   let pezzo;
+   if(idx>=0){
+    pezzo=resto;
+    residui[idx]-=pezzo;
+   }else{
+    idx=residui.reduce((best,x,i,a)=>
+      x>a[best] ? i:best,0);
+    if(!residui.length||residui[idx]<=0.001){
+     residui.push(340);
+     nuove++;
+     idx=residui.length-1;
+    }
+    pezzo=Math.min(resto,residui[idx]);
+    residui[idx]-=pezzo;
+   }
+   tagli.push(Math.round(pezzo*100)/100);
+   resto-=pezzo;
+   pezzi++;
+  }
+  giunzioni+=Math.max(0,pezzi-1);
+ }
+ const vitiGiunzione=giunzioni*2;
+ const vitiFissaggio=vitoni;
+ const vitiTot=vitiGiunzione+vitiFissaggio;
+ const dati=[
+ ["Pannelli",pannelli],
+ ["Profili nuovi da 340 cm",nuove],
+ ["Lunghezza totale profili",metri.toFixed(2)+" m"],
+ ["Morsetti universali",morsetti],
+ ["Vitoni FI71203",vitoni],
+ ["Piastre FI71205",vitoni],
+ ["Piastrine di congiunzione",giunzioni],
+ ["Viti per giunzioni",vitiGiunzione],
+ ["Dadi per giunzioni",vitiGiunzione],
+ ["Viti per fissaggio profili (da verificare)",vitiFissaggio],
+ ["Dadi per fissaggio profili (da verificare)",vitiFissaggio],
+ ["Totale viti ipotetico",vitiTot],
+ ["Totale dadi ipotetico",vitiTot]
+ ];
+ let html="<table><tr><th>Materiale</th><th>Quantità</th></tr>";
+ dati.forEach(x=>{
+  html+="<tr><td>"+x[0]+"</td><td>"+x[1]+"</td></tr>";
+ });
+ html+="</table>";
+ html+="<div class='result'><b>Tagli teorici:</b><p>"+
+ tagli.map(x=>x.toFixed(1)+" cm").join(" · ")+"</p>";
+ html+="<b>Residui teorici:</b><p>"+
+ residui.filter(x=>x>0.1).map(x=>x.toFixed(1)+" cm").join(" · ")+"</p></div>";
+ html+="<p class='small'>Il conteggio non considera lo spessore della lama. Le giunzioni e gli spezzoni devono essere verificati per l'impiego effettivo. Le viti OBOB620750 e i dadi OBOB620627 sono candidati per i fissaggi, ma la compatibilità e l'utilizzo nelle giunzioni devono essere confermati.</p>";
+ document.getElementById("risultato").innerHTML=html;
+ disegnaSchema();
+}
+function disegnaSchema(){
+ const box=document.getElementById("schema");
+ box.innerHTML="";
+ righe.forEach((n,i)=>{
+  let div=document.createElement("div");
+  div.className="fila";
+  let title=document.createElement("b");
+  title.textContent="Fila "+(i+1)+" - "+n+" pannelli ("+(n*118)+" cm)";
+  let panels=document.createElement("div");
+  panels.className="pannelli";
+  for(let k=0;k<n;k++){
+   let p=document.createElement("div");
+   p.className="panel";
+   panels.append(p);
+  }
+  let rail1=document.createElement("div");
+  let rail2=document.createElement("div");
+  rail1.className="rail";
+  rail2.className="rail";
+  div.append(title,rail1,panels,rail2);
+  box.append(div);
+ });
+}
+function salva(){
+ try{
+  localStorage.setItem("ftv-progetto",JSON.stringify({
+   nome:document.getElementById("nome").value,
+   righe:righe,
+   passo:document.getElementById("passo").value,
+   avanzi:document.getElementById("avanzi").value
+  }));
+  alert("Progetto salvato su questo dispositivo");
+ }catch(e){
+  alert("Salvataggio non disponibile in questo browser");
+ }
+}
+function carica(){
+ try{
+  let s=localStorage.getItem("ftv-progetto");
+  if(!s){alert("Nessun progetto salvato");return}
+  let d=JSON.parse(s);
+  document.getElementById("nome").value=d.nome||"";
+  righe=Array.isArray(d.righe)?d.righe:[4];
+  document.getElementById("passo").value=d.passo||"90";
+  document.getElementById("avanzi").value=d.avanzi||"";
+  disegnaRighe();
+  calcola();
+ }catch(e){alert("Impossibile caricare il progetto")}
+}
+aggiungiFila(4);
+</script>
+</body>
+</html>
