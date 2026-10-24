@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Calcolo Materiali FTV</title>
+<style>
+:root{font-family:Arial,sans-serif;color:#17334c;background:#edf2f7}
+*{box-sizing:border-box}body{margin:0}header{background:#153d60;color:white;padding:23px 17px}
+header h1{margin:0;font-size:24px}header p{margin:7px 0 0}
+main{max-width:850px;margin:auto;padding:15px}
+section{background:white;border-radius:15px;padding:18px;margin:14px 0;box-shadow:0 2px 8px #1232}
+h2{font-size:20px;margin:5px 0 18px}
+label{display:block;font-weight:bold;margin:12px 0 6px}
+input,select{width:100%;padding:12px;border:1px solid #bac8d4;border-radius:8px;font-size:16px}
+input[type=checkbox]{width:19px;height:19px;flex-shrink:0}
+button{border:0;border-radius:9px;padding:12px 15px;background:#f39228;color:#142c40;font-weight:bold;font-size:15px;margin:5px 4px 5px 0;cursor:pointer}
+button.alt{background:#dce7ef}button.danger{background:#f9d6d6}
+.fila{background:#f0f5f9;padding:12px;border-radius:10px;margin:10px 0}
+.flex{display:flex;gap:10px;align-items:center}.flex input{flex:1;min-width:0}
+.small{color:#617487;font-size:13px;line-height:1.5}
+.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:14px}
+td,th{padding:11px 7px;text-align:left;border-bottom:1px solid #dbe4eb}
+th{background:#eaf1f7}td:last-child,th:last-child{text-align:right}
+.pannelli{display:flex;flex-wrap:wrap;gap:4px;margin:9px 0 17px}
+.panel{width:35px;height:55px;background:#23618b;border:2px solid #91b9d4;border-radius:2px}
+.rail{height:5px;background:#ed9c2e;margin:8px 0}
+.result{background:#eef5fa;padding:12px;border-radius:9px;margin-top:12px}
+.hidden{display:none}.catalog-row{display:grid;grid-template-columns:26px 1fr 82px;align-items:center;gap:9px;padding:9px 0;border-bottom:1px solid #e0e7ed}
+.catalog-row .code{font-size:12px;color:#617487;overflow-wrap:anywhere}
+.catalog-row input[type=number]{padding:8px}
+#nomeStampa{display:none}
+@media print{
+button,.no-print,#catalogoSelezione{display:none!important}
+body{background:white}header{padding:12px 15px}
+main{max-width:none;padding:0}section{box-shadow:none;border:1px solid #ddd;break-inside:avoid}
+#sezioneProgetto{display:none}#nomeStampa{display:block}
+}
+</style>
+</head>
+<body>
+<header><h1>☀️ Calcolo Materiali FTV</h1><p>Dimensionamento e distinta materiali</p></header>
+<main>
+<section id="sezioneProgetto">
+<h2>Nuovo progetto</h2>
+<label for="nome">Nome lavoro</label><input id="nome" placeholder="Es. Rossi - falda sud">
+<label>File di pannelli verticali</label><div id="file"></div>
+<button onclick="aggiungiFila()">+ Aggiungi fila</button>
+<label for="passo">Interasse massimo vitoni</label>
+<select id="passo"><option value="80">80 cm</option><option value="85">85 cm</option><option value="90" selected>90 cm</option></select>
+<label for="avanzi">Spezzoni disponibili (cm)</label><input id="avanzi" placeholder="Es. 104, 80, 155">
+<p class="small">118 cm per pannello. Due linee di profilo per ogni fila verticale. Barre da 340 cm. Gli spezzoni possono essere riutilizzati.</p>
+<button onclick="calcola()">Calcola materiali</button>
+<button class="alt" onclick="salva()">Salva progetto</button>
+<button class="alt" onclick="carica()">Carica salvato</button>
+</section>
+<section id="catalogoSelezione">
+<h2>Catalogo materiali</h2>
+<p class="small">Seleziona i materiali da aggiungere alla distinta. Le quantità della struttura vengono già calcolate automaticamente e non devono essere selezionate una seconda volta.</p>
+<label for="ricerca">Cerca per descrizione o codice</label>
+<input id="ricerca" placeholder="Es. cavo solare, FI71205..." oninput="disegnaCatalogo()">
+<div id="catalogo"></div>
+<h3>Nuovo articolo personalizzato</h3>
+<label for="nuovoCodice">Codice (facoltativo)</label><input id="nuovoCodice" placeholder="Codice articolo">
+<label for="nuovoNome">Descrizione</label><input id="nuovoNome" placeholder="Nome del materiale">
+<button class="alt" onclick="aggiungiArticolo()">+ Aggiungi al catalogo</button>
+<p class="small">Il catalogo personalizzato e le selezioni restano salvati su questo dispositivo quando premi «Salva progetto».</p>
+</section>
+<section>
+<h2>Schema disposizione</h2><p id="nomeStampa"></p>
+<div id="schema"><p class="small">Inserisci i pannelli e premi Calcola materiali.</p></div>
+</section>
+<section>
+<h2>Distinta materiali</h2>
+<div id="risultato"><p class="small">Nessun calcolo effettuato.</p></div>
+<button class="alt" onclick="window.print()">Stampa / Salva PDF</button>
+</section>
+<section><h2>Note tecniche</h2>
+<p class="small">I risultati sono stime geometriche, non verifiche strutturali. Gli ancoraggi devono rispettare le istruzioni del produttore, i supporti del tetto e i carichi di progetto.</p>
+<p class="small">Il numero di barre e giunzioni è una stima con tagli riutilizzabili. Verificare lunghezze minime di appoggio, posizione delle giunzioni e spessore della lama.</p>
+</section>
+</main>
+<script>
+const fileBox=document.getElementById("file");
+let righe=[];
+const catalogoBase=[
+["BATTERIA FOX EP11",""],["BATTERIA MASTER","CM4300H"],["BATTERIA SLAVE","CS4300H"],
+["CAVO SOLARE NERO DA 6","CVH1Z21X6NEBO/1"],["CAVO SOLARE ROSSO DA 6 MM","CVH1Z21X6RSBO/1"],
+["Connettore Cabur Solar (femmina)","CUIS24241N"],["Connettore Cabur Solar (maschio)","CUIS14240N"],
+["DADO PER FARFALLA","OBOB620627"],["ESS-SAH5B10","HOPETREK"],
+["FUSIBILI 10X38 16A","IW1465016"],["H3-10.0-SMART INVERTER","H3-10.0-SMART"],
+["INTERRUTTORE MAGNETO TERMICO 4P 25A","MGA979425"],
+["INTERRUTTORE MAGNETO TERMICO DIFFERENZIALE 10A","MGA9DE2610"],
+["Inverter 6 kw","H1-6.0-E-G2-WL"],["MAGNETO TERMICO 25A","MGR9F32225"],
+["MORSETTO FISHER","FI538880"],["MORSETTO UNICO","FI519784"],
+["Morsetto universale orbis","OBOB620505"],
+["PANNELLO FOTOVOLTAICO AIKO NEOSTAR 2P+ A475-MCE54DW","AIKO NEOSTAR 2P+ A475-MCE54DW"],
+["PANNELLO FOTOVOLTAICO AIKO 485Wp","AIKO - A485-MCE54Dw 485Wp"],
+["PIASTRINA DI CONNESSIONE","FI71205"],["PORTAFUSIBILI","LVB01D2P"],
+["PROFILO FISHER (grecata)","FI567412"],["PROFILO ORBIS","OBOB620002"],
+["QUADRO 12 MODULI","BO06523"],["QUADRO 24 M","BO06525"],
+["RIVETTI","FI545769"],["SOLAR-FLAT 4850MM","FI569374"],
+["STAFFE PER TEGOLE","OBOB620223"],["VITE A FARFALLA","OBOB620750"],
+["VITE FILETTATA 10X250","FIFI71203"],["WALLBOX FOX 22 KW","A022KS1"],
+["WALLBOX 7,3 KW","A7300S1"],["ZOOTUP MONOFASE","6c200023"],["ZOOTUP TRIFASE","6C200025"]
+];
+let personalizzati=[];
+let selezionati={};
+const automatici=new Set(["OBOB620505","FI71205","OBOB620002","OBOB620627","OBOB620750","FIFI71203"]);
+function keyArticolo(a){return a[1]||"nome:"+a[0].toLowerCase()}
+function tuttiArticoli(){return [...catalogoBase,...personalizzati]}
+function disegnaCatalogo(){
+ const q=document.getElementById("ricerca").value.trim().toLowerCase();
+ const box=document.getElementById("catalogo");box.replaceChildren();
+ let count=0;
+ for(const a of tuttiArticoli()){
+  if(!(a[0]+" "+a[1]).toLowerCase().includes(q))continue;
+  count++;
+  const key=keyArticolo(a), stato=selezionati[key]||{checked:false,qty:1};
+  const row=document.createElement("div");row.className="catalog-row";
+  const check=document.createElement("input");check.type="checkbox";check.checked=!!stato.checked;
+  const label=document.createElement("div");
+  const title=document.createElement("div");title.textContent=a[0];label.append(title);
+  const code=document.createElement("div");code.className="code";code.textContent=a[1]||"Codice non indicato";label.append(code);
+  const qty=document.createElement("input");qty.type="number";qty.min="1";qty.step="1";qty.value=stato.qty||1;
+  if(automatici.has(a[1])){
+   const note=document.createElement("div");note.className="code";note.textContent="Conteggiato automaticamente nella struttura";label.append(note);
+  }
+  check.onchange=()=>{selezionati[key]={checked:check.checked,qty:Math.max(1,Math.floor(Number(qty.value)||1))};aggiornaDistinta()};
+  qty.onchange=()=>{qty.value=Math.max(1,Math.floor(Number(qty.value)||1));selezionati[key]={checked:check.checked,qty:Number(qty.value)};aggiornaDistinta()};
+  row.append(check,label,qty);box.append(row);
+ }
+ if(!count){const p=document.createElement("p");p.className="small";p.textContent="Nessun materiale trovato.";box.append(p)}
+}
+function aggiungiArticolo(){
+ const nome=document.getElementById("nuovoNome").value.trim(),codice=document.getElementById("nuovoCodice").value.trim();
+ if(!nome){alert("Inserisci la descrizione del materiale");return}
+ const nuovo=[nome,codice];
+ if(tuttiArticoli().some(a=>keyArticolo(a)===keyArticolo(nuovo))){alert("Articolo già presente: controlla nome o codice");return}
+ personalizzati.push(nuovo);
+ document.getElementById("nuovoNome").value="";document.getElementById("nuovoCodice").value="";
+ document.getElementById("ricerca").value="";disegnaCatalogo();
+}
+function aggiungiFila(n=4){righe.push(n);disegnaRighe()}
+function disegnaRighe(){
+ fileBox.innerHTML="";
+ righe.forEach((n,i)=>{
+  const d=document.createElement("div");d.className="fila";
+  const l=document.createElement("label");l.textContent="Fila "+(i+1)+" - numero pannelli";
+  const wrap=document.createElement("div");wrap.className="flex";
+  const inp=document.createElement("input");inp.type="number";inp.min="1";inp.max="100";inp.value=n;
+  inp.onchange=()=>{righe[i]=Math.max(1,Math.floor(Number(inp.value)||1));inp.value=righe[i]};
+  const del=document.createElement("button");del.className="danger";del.textContent="Elimina";
+  del.onclick=()=>{righe.splice(i,1);disegnaRighe()};
+  wrap.append(inp,del);d.append(l,wrap);fileBox.append(d);
+ });
+}
+let automatiche=[];
+let dettagliTagli=null;
+function calcola(){
+ if(!righe.length){alert("Aggiungi almeno una fila");return}
+ const passo=Number(document.getElementById("passo").value);
+ const pannelli=righe.reduce((a,b)=>a+b,0);
+ const morsetti=righe.reduce((a,b)=>a+2*(b+1),0);
+ const linee=righe.flatMap(n=>[n*118,n*118]);
+ const metri=linee.reduce((a,b)=>a+b,0)/100;
+ const vitoni=linee.reduce((a,L)=>a+Math.ceil(L/passo)+1,0);
+ const inputAvanzi=document.getElementById("avanzi").value;
+ const scorte=inputAvanzi.split(",").map(x=>Number(x.trim())).filter(x=>Number.isFinite(x)&&x>0&&x<=340);
+ let tagli=[],nuove=0,giunzioni=0,residui=[...scorte];
+ // Algoritmo euristico originale conservato; non garantisce il taglio ottimale.
+ for(const L of [...linee].sort((a,b)=>b-a)){
+  let resto=L,pezzi=0;
+  while(resto>0.001){
+   let idx=residui.findIndex(x=>x>=resto),pezzo;
+   if(idx>=0){pezzo=resto;residui[idx]-=pezzo}
+   else{
+    idx=residui.reduce((best,x,i,a)=>x>a[best]?i:best,0);
+    if(!residui.length||residui[idx]<=0.001){residui.push(340);nuove++;idx=residui.length-1}
+    pezzo=Math.min(resto,residui[idx]);residui[idx]-=pezzo;
+   }
+   tagli.push(Math.round(pezzo*100)/100);resto-=pezzo;pezzi++;
+  }
+  giunzioni+=Math.max(0,pezzi-1);
+ }
+ const vitiGiunzione=giunzioni*2,vitiFissaggio=vitoni,vitiTot=vitiGiunzione+vitiFissaggio;
+ automatiche=[
+ ["Pannelli (quantità geometrica)","",pannelli],
+ ["Profili nuovi da 340 cm","OBOB620002",nuove],
+ ["Lunghezza totale profili","",metri.toFixed(2)+" m"],
+ ["Morsetti universali","OBOB620505",morsetti],
+ ["Vitoni M10×250","FIFI71203",vitoni],
+ ["Piastre di connessione","FI71205",vitoni],
+ ["Piastrine di giunzione profili (codice da verificare)","",giunzioni],
+ ["Viti per giunzioni (codice da verificare)","",vitiGiunzione],
+ ["Dadi per giunzioni (codice da verificare)","",vitiGiunzione],
+ ["Viti per fissaggio profili (da verificare)","OBOB620750",vitiFissaggio],
+ ["Dadi per fissaggio profili (da verificare)","OBOB620627",vitiFissaggio],
+ ["Totale viti ipotetico","",vitiTot],
+ ["Totale dadi ipotetico","",vitiTot]
+ ];
+ dettagliTagli={tagli,residui};
+ aggiornaDistinta();disegnaSchema();
+}
+function aggiornaDistinta(){
+ const box=document.getElementById("risultato");box.replaceChildren();
+ if(!automatiche.length){const p=document.createElement("p");p.className="small";p.textContent="Premi Calcola materiali per visualizzare la distinta.";box.append(p);return}
+ const table=document.createElement("table");
+ const tr=document.createElement("tr");
+ for(const s of ["Codice","Materiale","Quantità"]){const th=document.createElement("th");th.textContent=s;tr.append(th)}
+ table.append(tr);
+ function addRow(c,n,q){
+  const r=document.createElement("tr");
+  for(const val of [c||"—",n,q]){const td=document.createElement("td");td.textContent=String(val);r.append(td)}
+  table.append(r);
+ }
+ automatiche.forEach(a=>addRow(a[1],a[0],a[2]));
+ const aggiunti=tuttiArticoli().filter(a=>selezionati[keyArticolo(a)]?.checked);
+ if(aggiunti.length){
+  const heading=document.createElement("tr");const th=document.createElement("th");th.colSpan=3;th.textContent="Materiali aggiuntivi selezionati";heading.append(th);table.append(heading);
+  aggiunti.forEach(a=>{
+   const key=keyArticolo(a),q=selezionati[key].qty;
+   addRow(a[1],a[0],q);
+  });
+ }
+ const wrap=document.createElement("div");wrap.className="table-wrap";wrap.append(table);box.append(wrap);
+ const res=document.createElement("div");res.className="result";
+ const title=document.createElement("b");title.textContent="Tagli teorici:";res.append(title);
+ const p=document.createElement("p");p.textContent=dettagliTagli.tagli.map(x=>x.toFixed(1)+" cm").join(" · ");res.append(p);
+ const title2=document.createElement("b");title2.textContent="Residui teorici:";res.append(title2);
+ const p2=document.createElement("p");p2.textContent=dettagliTagli.residui.filter(x=>x>0.1).map(x=>x.toFixed(1)+" cm").join(" · ");res.append(p2);box.append(res);
+ const note=document.createElement("p");note.className="small";
+ note.textContent="Il conteggio non considera lo spessore della lama. Le giunzioni e gli spezzoni devono essere verificati. Le viti OBOB620750 e i dadi OBOB620627 sono candidati per i fissaggi: verificare compatibilità e quantità effettive. I codici del catalogo sono ripresi dall'elenco fornito e vanno verificati prima di ordinare.";
+ box.append(note);
+ document.getElementById("nomeStampa").textContent="Progetto: "+(document.getElementById("nome").value||"Senza nome");
+}
+function disegnaSchema(){
+ const box=document.getElementById("schema");box.innerHTML="";
+ righe.forEach((n,i)=>{
+  const div=document.createElement("div");div.className="fila";
+  const title=document.createElement("b");title.textContent="Fila "+(i+1)+" - "+n+" pannelli ("+(n*118)+" cm)";
+  const panels=document.createElement("div");panels.className="pannelli";
+  for(let k=0;k<n;k++){const p=document.createElement("div");p.className="panel";panels.append(p)}
+  const rail1=document.createElement("div"),rail2=document.createElement("div");
+  rail1.className="rail";rail2.className="rail";div.append(title,rail1,panels,rail2);box.append(div);
+ });
+}
+function salva(){
+ try{
+  localStorage.setItem("ftv-progetto",JSON.stringify({
+   nome:document.getElementById("nome").value,righe,passo:document.getElementById("passo").value,
+   avanzi:document.getElementById("avanzi").value,selezionati,personalizzati
+  }));
+  alert("Progetto salvato su questo dispositivo");
+ }catch(e){alert("Salvataggio non disponibile in questo browser")}
+}
+function carica(){
+ try{
+  const s=localStorage.getItem("ftv-progetto");if(!s){alert("Nessun progetto salvato");return}
+  const d=JSON.parse(s);
+  document.getElementById("nome").value=d.nome||"";
+  righe=Array.isArray(d.righe)?d.righe:[4];
+  document.getElementById("passo").value=d.passo||"90";
+  document.getElementById("avanzi").value=d.avanzi||"";
+  selezionati=d.selezionati||{};personalizzati=Array.isArray(d.personalizzati)?d.personalizzati:[];
+  disegnaRighe();disegnaCatalogo();calcola();
+ }catch(e){alert("Impossibile caricare il progetto")}
+}
+aggiungiFila(4);disegnaCatalogo();
+</script>
+</body></html>
